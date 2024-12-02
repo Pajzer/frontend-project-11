@@ -7,4 +7,4 @@
 
 [![Maintainability](https://api.codeclimate.com/v1/badges/63221d618436d5f40cef/maintainability)](https://codeclimate.com/github/Pajzer/frontend-project-11/maintainability)
 
-https://frontend-project-11-tau-flax.vercel.app/
+https://frontend-project-11-jet-pi.vercel.app/
