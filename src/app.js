@@ -1,5 +1,7 @@
 import onChange from 'on-change';
 import * as yup from 'yup';
+import i18next from 'i18next';
+import resources from './locales/index.js';
 import renderForm from './view.js';
 
 const validate = (url, list) => {
@@ -8,17 +10,36 @@ const validate = (url, list) => {
 };
 
 export default () => {
+  const defaultLanguage = 'ru';
+
+  const i18nInstance = i18next.createInstance();
+
+  i18nInstance.init({
+    lng: defaultLanguage,
+    debug: true,
+    resources,
+  });
+
+  yup.setLocale({
+    string: {
+      url: i18nInstance.t('wrongUrl.url'),
+    },
+    mixed: {
+      notOneOf: i18nInstance.t('wrongUrl.notOneOf'),
+    },
+  });
+
   const state = {
     form: {
-      state: 'filing',
-      error: null,
+      formStatus: 'filing',
+      error: [],
     },
     posts: [],
   };
 
   const watchedState = onChange(state, (path, value) => {
     if (path === 'form') {
-      renderForm(value);
+      renderForm(value, i18nInstance);
     }
   });
 
@@ -32,14 +53,14 @@ export default () => {
       .then(() => {
         state.posts.push(newUrl);
         watchedState.form = {
-          state: 'correctUrl',
+          formStatus: 'correctUrl',
         };
         e.target.reset();
       })
       .catch((ex) => {
         watchedState.form = {
-          state: 'wrongUrl',
-          error: ex.type,
+          formStatus: 'wrongUrl',
+          error: ex.errors,
         };
       });
   });
