@@ -46,6 +46,8 @@ const parseDataFromRss = (xmlString) => {
   };
 };
 
+const delay = 5000;
+
 export default () => {
   yup.setLocale({
     string: {
@@ -97,6 +99,35 @@ export default () => {
       });
   };
 
+  const makeFeed = (d, url) => {
+    const feed = {};
+    feed.id = nextFeedId;
+    nextFeedId += 1;
+    feed.title = d.title;
+    feed.link = url;
+    feed.description = d.description;
+    return feed;
+  };
+
+  let id = 0;
+
+  const makePosts = (d) => d.items.map((item) => {
+    const newItem = { ...item, id, feedId: nextFeedId - 1 };
+    id += 1;
+    return newItem;
+  });
+
+  const updPosts = () => {
+    const promise = Promise.all(state.feeds.map(({ link }) => getDataFromRss(link)
+      .then((data) => makePosts(data))));
+    promise.then((prom) => {
+      const existingLinks = watchedState.posts.map(({ link }) => link);
+      const newPosts = prom.flat().filter((p) => !existingLinks.includes(p.link));
+      watchedState.posts = watchedState.posts.concat(newPosts);
+    });
+    setTimeout(updPosts, delay);
+  };
+
   const form = document.querySelector('form');
 
   form.addEventListener('submit', (e) => {
@@ -106,29 +137,11 @@ export default () => {
     const rssLinks = state.feeds.map((feed) => feed.link);
     validate(newUrl, rssLinks)
       .then(() => {
-        const makeFeed = (d) => {
-          const feed = {};
-          feed.id = nextFeedId;
-          nextFeedId += 1;
-          feed.title = d.title;
-          feed.link = newUrl;
-          feed.description = d.description;
-          return feed;
-        };
-
-        const makePosts = (d) => {
-          let id = 0;
-          return d.items.map((item) => {
-            const newItem = { ...item, id, feedId: nextFeedId - 1 };
-            id += 1;
-            return newItem;
-          });
-        };
         getDataFromRss(newUrl).then((data) => {
           watchedState.form = {
             formStatus: 'correctUrl',
           };
-          watchedState.feeds = watchedState.feeds.concat(makeFeed(data));
+          watchedState.feeds = watchedState.feeds.concat(makeFeed(data, newUrl));
           watchedState.posts = watchedState.posts.concat(makePosts(data));
           e.target.reset();
         })
@@ -145,5 +158,6 @@ export default () => {
           formStatus: 'wrongUrl',
         };
       });
+    updPosts();
   });
 };
