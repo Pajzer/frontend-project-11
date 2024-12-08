@@ -3,7 +3,9 @@ import * as yup from 'yup';
 import i18next from 'i18next';
 import axios from 'axios';
 import resources from './locales/index.js';
-import { renderForm, renderFeeds, renderPosts } from './view.js';
+import {
+  renderForm, renderFeeds, renderPosts, renderModal, initRender,
+} from './view.js';
 
 const getBrushedUrl = (url) => {
   const lastSymb = url.trim().slice(-1);
@@ -20,13 +22,6 @@ const validate = (url, list) => {
 
 const defaultLanguage = 'ru';
 
-const i18nInstance = i18next.createInstance();
-i18nInstance.init({
-  lng: defaultLanguage,
-  debug: true,
-  resources,
-});
-
 const parseDataFromRss = (xmlString) => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlString, 'text/xml');
@@ -36,19 +31,26 @@ const parseDataFromRss = (xmlString) => {
   const items = [...doc.querySelectorAll('rss>channel>item')].map((item) => {
     const title = item.querySelector('title').textContent;
     const link = item.querySelector('link').textContent;
-    return { title, link };
+    const description = item.querySelector('description').textContent;
+    return { title, link, description };
   });
 
   return {
     title: doc.querySelector('rss>channel>title').textContent,
-    description: doc.querySelector('rss>channel>title').textContent,
+    description: doc.querySelector('rss>channel>description').textContent,
     items,
   };
 };
 
-const delay = 5000;
-
 export default () => {
+  const i18nInstance = i18next.createInstance();
+  i18nInstance.init({
+    lng: defaultLanguage,
+    debug: true,
+    resources,
+  });
+
+  initRender(i18nInstance);
   yup.setLocale({
     string: {
       url: i18nInstance.t('wrongUrl.url'),
@@ -67,17 +69,24 @@ export default () => {
     },
     feeds: [],
     posts: [],
+    currentPostId: null,
+    visitedPostsId: [],
   };
+
+  const delay = 5000;
 
   const watchedState = onChange(state, (path, value) => {
     if (path === 'form') {
       renderForm(value, i18nInstance);
     }
     if (path === 'feeds') {
-      renderFeeds(value);
+      renderFeeds(value, i18nInstance);
     }
     if (path === 'posts') {
-      renderPosts(value);
+      renderPosts(value, state.visitedPostsId, i18nInstance);
+    }
+    if (path === 'currentPostId') {
+      renderModal(value, state.posts, i18nInstance);
     }
   });
 
@@ -85,7 +94,7 @@ export default () => {
     const url = `https://allorigins.hexlet.app/get?disableCache=true&url=${encodeURIComponent(u)}`;
     return axios.get(url)
       .then((response) => {
-        if (response.data.status.http_code !== 200) {
+        if (response.status !== 200) {
           throw new Error('wrongUrl.invalidRss');
         }
         const xmlStr = response.data.contents;
@@ -158,6 +167,16 @@ export default () => {
           formStatus: 'wrongUrl',
         };
       });
-    updPosts();
+  });
+
+  updPosts();
+
+  const postsContainer = document.querySelector('.posts');
+  postsContainer.addEventListener('click', (e) => {
+    if (e.target.nodeName === 'BUTTON' || e.target.nodeName === 'A') {
+      const postId = e.target.getAttribute('data-id');
+      watchedState.currentPostId = postId;
+      watchedState.visitedPostsId.push(postId);
+    }
   });
 };
