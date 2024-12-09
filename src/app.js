@@ -4,16 +4,10 @@ import i18next from 'i18next';
 import axios from 'axios';
 import resources from './locales/index.js';
 import {
-  renderForm, renderFeeds, renderPosts, renderModal, initRender,
+  renderForm, renderFeeds, renderPosts, renderModal, initializeUI,
 } from './view.js';
 
-const getBrushedUrl = (url) => {
-  const lastSymb = url.trim().slice(-1);
-  if (lastSymb === '/') {
-    return url.trim().slice(0, -1);
-  }
-  return url.trim();
-};
+const normalizeUrl = (url) => url.trim().replace(/\/$/, '');
 
 const validate = (url, list) => {
   const formSchema = yup.string().url().notOneOf(list);
@@ -28,12 +22,11 @@ const parseDataFromRss = (xmlString) => {
   if (!doc.querySelector('rss')) {
     throw new Error('wrongUrl.invalidRss');
   }
-  const items = [...doc.querySelectorAll('rss>channel>item')].map((item) => {
-    const title = item.querySelector('title').textContent;
-    const link = item.querySelector('link').textContent;
-    const description = item.querySelector('description').textContent;
-    return { title, link, description };
-  });
+  const items = [...doc.querySelectorAll('rss>channel>item')].map((item) => ({
+    title: item.querySelector('title').textContent,
+    link: item.querySelector('link').textContent,
+    description: item.querySelector('description').textContent,
+  }));
 
   return {
     title: doc.querySelector('rss>channel>title').textContent,
@@ -50,7 +43,7 @@ export default () => {
     resources,
   });
 
-  initRender(i18nInstance);
+  initializeUI(i18nInstance);
   yup.setLocale({
     string: {
       url: i18nInstance.t('wrongUrl.url'),
@@ -76,39 +69,42 @@ export default () => {
   const delay = 5000;
 
   const watchedState = onChange(state, (path, value) => {
-    if (path === 'form') {
-      renderForm(value, i18nInstance);
-    }
-    if (path === 'feeds') {
-      renderFeeds(value, i18nInstance);
-    }
-    if (path === 'posts') {
-      renderPosts(value, state.visitedPostsId, i18nInstance);
-    }
-    if (path === 'currentPostId') {
-      renderModal(value, state.posts, i18nInstance);
+    switch (path) {
+      case 'form':
+        renderForm(value, i18nInstance);
+        break;
+      case 'feeds':
+        renderFeeds(value, i18nInstance);
+        break;
+      case 'posts':
+        renderPosts(value, state.visitedPostsId, i18nInstance);
+        break;
+      case 'currentPostId':
+        renderModal(value, state.posts, i18nInstance);
+        break;
+      default:
+        break;
     }
   });
 
-  const getDataFromRss = (u) => {
-    const url = `https://allorigins.hexlet.app/get?disableCache=true&url=${encodeURIComponent(u)}`;
-    return axios.get(url)
+  const fetchRssData = (url) => {
+    const apiUrl = `https://allorigins.hexlet.app/get?disableCache=true&url=${encodeURIComponent(url)}`;
+    return axios.get(apiUrl)
       .then((response) => {
         if (response.status !== 200) {
           throw new Error('wrongUrl.invalidRss');
         }
-        const xmlStr = response.data.contents;
-        return parseDataFromRss(xmlStr);
+        return parseDataFromRss(response.data.contents);
       })
-      .catch((ex) => {
-        if (ex instanceof axios.AxiosError) {
+      .catch((error) => {
+        if (error.isAxiosError) {
           throw new Error('wrongUrl.network');
         }
-        throw ex;
+        throw error;
       });
   };
 
-  const makeFeed = (d, url) => {
+  const createFeed = (d, url) => {
     const feed = {};
     feed.id = nextFeedId;
     nextFeedId += 1;
@@ -120,21 +116,20 @@ export default () => {
 
   let id = 0;
 
-  const makePosts = (d) => d.items.map((item) => {
+  const createPosts = (d) => d.items.map((item) => {
     const newItem = { ...item, id, feedId: nextFeedId - 1 };
     id += 1;
     return newItem;
   });
 
-  const updPosts = () => {
-    const promise = Promise.all(state.feeds.map(({ link }) => getDataFromRss(link)
-      .then((data) => makePosts(data))));
-    promise.then((prom) => {
-      const existingLinks = watchedState.posts.map(({ link }) => link);
-      const newPosts = prom.flat().filter((p) => !existingLinks.includes(p.link));
-      watchedState.posts = watchedState.posts.concat(newPosts);
+  const updatePosts = () => {
+    const promises = state.feeds.map(({ link }) => fetchRssData(link).then(createPosts));
+    Promise.all(promises).then((results) => {
+      const existingLinks = new Set(state.posts.map(({ link }) => link));
+      const newPosts = results.flat().filter(({ link }) => !existingLinks.has(link));
+      watchedState.posts = [...state.posts, ...newPosts];
     });
-    setTimeout(updPosts, delay);
+    setTimeout(updatePosts, delay);
   };
 
   const form = document.querySelector('form');
@@ -142,34 +137,26 @@ export default () => {
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const newUrl = getBrushedUrl(formData.get('url'));
+    const newUrl = normalizeUrl(formData.get('url'));
     const rssLinks = state.feeds.map((feed) => feed.link);
+
     validate(newUrl, rssLinks)
-      .then(() => {
-        getDataFromRss(newUrl).then((data) => {
-          watchedState.form = {
-            formStatus: 'correctUrl',
-          };
-          watchedState.feeds = watchedState.feeds.concat(makeFeed(data, newUrl));
-          watchedState.posts = watchedState.posts.concat(makePosts(data));
-          e.target.reset();
-        })
-          .catch((ex) => {
-            watchedState.form = {
-              error: [i18nInstance.t(ex.message)],
-              formStatus: 'wrongUrl',
-            };
-          });
+      .then(() => fetchRssData(newUrl))
+      .then((data) => {
+        watchedState.form = { formStatus: 'correctUrl' };
+        watchedState.feeds = [...state.feeds, createFeed(data, newUrl)];
+        watchedState.posts = [...state.posts, ...createPosts(data)];
+        e.target.reset();
       })
-      .catch((ex) => {
+      .catch((error) => {
         watchedState.form = {
-          error: ex.errors ?? [i18nInstance.t(ex.message)],
+          error: error.errors || [i18nInstance.t(error.message)],
           formStatus: 'wrongUrl',
         };
       });
   });
 
-  updPosts();
+  updatePosts();
 
   const postsContainer = document.querySelector('.posts');
   postsContainer.addEventListener('click', (e) => {

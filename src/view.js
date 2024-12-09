@@ -139,7 +139,7 @@ export const renderModal = (currentPostId, st, i18nInstance) => {
   modalLink.setAttribute('href', link);
 };
 
-export const initRender = (i18nInstance) => {
+export const initializeUI = (i18nInstance) => {
   document.getElementById('main-title').textContent = i18nInstance.t('main.title');
   document.getElementById('main-lead').textContent = i18nInstance.t('main.lead');
   document.getElementById('main-example').textContent = i18nInstance.t('example');
