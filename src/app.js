@@ -3,6 +3,7 @@ import * as yup from 'yup';
 import i18next from 'i18next';
 import axios from 'axios';
 import resources from './locales/index.js';
+import parseDataFromRss from './parser.js';
 import {
   renderForm, renderFeeds, renderPosts, renderModal, initializeUI,
 } from './view.js';
@@ -15,25 +16,6 @@ const validate = (url, list) => {
 };
 
 const defaultLanguage = 'ru';
-
-const parseDataFromRss = (xmlString) => {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlString, 'text/xml');
-  if (!doc.querySelector('rss')) {
-    throw new Error('wrongUrl.invalidRss');
-  }
-  const items = [...doc.querySelectorAll('rss>channel>item')].map((item) => ({
-    title: item.querySelector('title').textContent,
-    link: item.querySelector('link').textContent,
-    description: item.querySelector('description').textContent,
-  }));
-
-  return {
-    title: doc.querySelector('rss>channel>title').textContent,
-    description: doc.querySelector('rss>channel>description').textContent,
-    items,
-  };
-};
 
 export default () => {
   const i18nInstance = i18next.createInstance();
