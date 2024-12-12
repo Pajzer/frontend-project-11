@@ -122,6 +122,9 @@ export default () => {
     const newUrl = normalizeUrl(formData.get('url'));
     const rssLinks = state.feeds.map((feed) => feed.link);
 
+    const submitButton = document.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+
     validate(newUrl, rssLinks)
       .then(() => fetchRssData(newUrl))
       .then((data) => {
@@ -135,6 +138,9 @@ export default () => {
           error: error.errors || [i18nInstance.t(error.message)],
           formStatus: 'wrongUrl',
         };
+      })
+      .finally(() => {
+        submitButton.disabled = false;
       });
   });
 
