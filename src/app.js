@@ -2,6 +2,7 @@ import onChange from 'on-change';
 import * as yup from 'yup';
 import i18next from 'i18next';
 import axios from 'axios';
+import _ from 'lodash';
 import resources from './locales/index.js';
 import parseDataFromRss from './parser.js';
 import {
@@ -17,9 +18,9 @@ const validate = (url, list) => {
 
 const defaultLanguage = 'ru';
 
-export default () => {
+export default async () => {
   const i18nInstance = i18next.createInstance();
-  i18nInstance.init({
+  await i18nInstance.init({
     lng: defaultLanguage,
     debug: true,
     resources,
@@ -34,8 +35,6 @@ export default () => {
       notOneOf: i18nInstance.t('wrongUrl.notOneOf'),
     },
   });
-
-  let nextFeedId = 0;
 
   const state = {
     form: {
@@ -88,19 +87,15 @@ export default () => {
 
   const createFeed = (d, url) => {
     const feed = {};
-    feed.id = nextFeedId;
-    nextFeedId += 1;
+    feed.id = _.uniqueId('feed_');
     feed.title = d.title;
     feed.link = url;
     feed.description = d.description;
     return feed;
   };
 
-  let id = 0;
-
   const createPosts = (d) => d.items.map((item) => {
-    const newItem = { ...item, id, feedId: nextFeedId - 1 };
-    id += 1;
+    const newItem = { ...item, id: _.uniqueId('post_'), feedId: state.feeds.length };
     return newItem;
   });
 
