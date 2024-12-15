@@ -18,6 +18,13 @@ const validate = (url, list) => {
 
 const defaultLanguage = 'ru';
 
+const buildProxyUrl = (url) => {
+  const proxyUrl = new URL('https://allorigins.hexlet.app/get');
+  proxyUrl.searchParams.set('disableCache', 'true');
+  proxyUrl.searchParams.set('url', url);
+  return proxyUrl.toString();
+};
+
 export default async () => {
   const i18nInstance = i18next.createInstance();
   await i18nInstance.init({
@@ -69,7 +76,7 @@ export default async () => {
   });
 
   const fetchRssData = (url) => {
-    const apiUrl = `https://allorigins.hexlet.app/get?disableCache=true&url=${encodeURIComponent(url)}`;
+    const apiUrl = buildProxyUrl(url);
     return axios.get(apiUrl)
       .then((response) => {
         if (response.status !== 200) {
@@ -105,8 +112,9 @@ export default async () => {
       const existingLinks = new Set(state.posts.map(({ link }) => link));
       const newPosts = results.flat().filter(({ link }) => !existingLinks.has(link));
       watchedState.posts = [...state.posts, ...newPosts];
+    }).finally(() => {
+      setTimeout(updatePosts, delay);
     });
-    setTimeout(updatePosts, delay);
   };
 
   const form = document.querySelector('form');
