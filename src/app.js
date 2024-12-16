@@ -134,11 +134,10 @@ export default async () => {
         watchedState.form = { formStatus: 'correctUrl' };
         watchedState.feeds = [...state.feeds, createFeed(data, newUrl)];
         watchedState.posts = [...state.posts, ...createPosts(data)];
-        e.target.reset();
       })
       .catch((error) => {
         watchedState.form = {
-          error: error.errors || [i18nInstance.t(error.message)],
+          error: [error.message],
           formStatus: 'wrongUrl',
         };
       })
